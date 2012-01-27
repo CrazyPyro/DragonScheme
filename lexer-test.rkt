@@ -8,13 +8,13 @@
   
   
 ;; strip the source location from the position token
-  ;; Taken from color-lexer.rkt
+  ;; Taken from Racket's color-lexer.rkt
 (define (strip-pos token)
    (match token
       [(position-token token start end) token]
       [else token]))
  
-; Compare the result of lexing a string of code, with the declared correct list of tokens that should be produced. 
+; Helper to create a unit test that compares the result of lexing a string of code, with the declared correct list of tokens that should be produced. 
 (define (test-lexing codestring correct-tokens failmessage)
   (test-begin
    (for/or ((token (lex-all codestring))
@@ -30,6 +30,8 @@
   (test-suite
     "Tests for lexer.rkt"
     
+    ;Simple Tests
+    
     (test-lexing "" (list 'eof) "blank")
     (test-lexing "(" (list 'open-paren) "one open paren")
     (test-lexing ")" (list 'close-paren) "one close paren")
@@ -37,17 +39,20 @@
     (test-lexing "; (5)" (list 'eof) "only a comment")
     (test-lexing "hello" (list 'identifier) "one identifier")
     (test-lexing "  \"Hello, I am a string\"  " (list 'string) "one string")
+    (test-lexing "cond" (list 'cond) "one cond")
+    (test-lexing "define" (list 'define) "one define")
+    (test-lexing "else" (list 'else) "one else")
+    (test-lexing "lambda" (list 'lambda) "one lambda")
+        
     ;(check-equal? (token-value (strip1 ((lex "5")))) 5 "integer value 5")
      
-    (test-lexing "(ident (5) [] \"str\" ) ; this is a comment"
-                  (list 'open-paren 'identifier 'open-paren 'integer 'close-paren 'open-bracket 'close-bracket 'string 'close-paren 'eof #t)
-                  "Every lexeme type plus eof and #t")
-    (test-lexing "(ident (5) [] \"str\" ) ; this is a comment"
-                  (list 'open-paren 'identifier 'open-paren 'integer 'close-paren 'open-bracket 'close-bracket 'string 'close-paren 'eof)
-                  "Every lexeme type minus #t")
-    (test-lexing "(ident (5) [] \"str\" ) ; this is a comment"
-                  (list 'open-paren 'identifier 'open-paren 'integer 'close-paren 'open-bracket 'close-bracket 'string 'close-paren)
-                  "Every lexeme type minus eof and #t")
+    ;Compound Tests
+    
+    (test-lexing "(define is-5?
+                      (lambda(x)  ; this is a comment
+                        (cond ((eq? x 5) \"yes!\") (else 0)))) ; this is another comment"
+                  (list 'open-paren 'define 'identifier 'open-paren 'lambda 'open-paren 'identifier 'close-paren 'open-paren 'cond 'open-paren 'open-paren 'identifier 'identifier 'integer 'close-paren 'string 'close-paren 'open-paren 'else 'integer 'close-paren 'close-paren 'close-paren 'close-paren 'eof #t)
+                  "Multiline. Every lexeme type plus eof and #t")
     
     (test-lexing "(ident (5) [] \"str\" ) ; this is a comment"
                   (list 'open-paren 'identifier 'open-paren 'integer 'close-paren 'open-bracket 'close-bracket 'string)

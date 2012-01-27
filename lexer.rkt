@@ -12,9 +12,13 @@
 (define-empty-tokens lang-empty-tokens 
   (
    ; Tokens for Scheme special characters:
-   eof open-paren close-paren open-bracket close-bracket open-brace close-brace pipe ;period semicolon 
+   eof open-paren close-paren open-bracket close-bracket open-brace close-brace pipe
+   ;TODO: period (for dot-notation) elipsis (... notating varargs)
    ; Tokens for core Scheme keywords:
-   ;and begin car case cond cons cdr define delay display do else if lambda let let* letrec or quote ;TODO:  map, set, quasiquote, unquote, unquote-splicing
+   cond define else lambda
+   ;TODO: 'quote #t #f
+   ;TODO: and begin car case cons cdr  delay display do  if  let let* letrec or 
+   ;TODO:  map, set, quasiquote, unquote, unquote-splicing
    ;TODO: Rest of R5RS: cadr (and variants), call-with-current-continuation call-with-input-file call-with-output-file call-with-values ceiling, char (all variants), define-syntax dynamic-wind for-each let-syntax letrec-syntax syntax-rules
    ))
 
@@ -41,11 +45,6 @@
       (port-count-lines! port)
       (in-port (lambda (port) (lang-lexer port)) port)
       ))
-   
-  
-  ;(define (make-token token-val)
-  ;  (token-integer token-val)) ; TODO: hardcoded for now
-
   
 ; Some abbreviations for convenience:
 ;TODO: also use define-lex-trans macro?
@@ -59,7 +58,7 @@
 
 
 ; String lexer is used by the main lexer
-  ;; Taken from Tiger's lexer
+  ;; Taken verbatim from endobson's "Tiger" lexer
 (define (string-lexer port start-pos)
   (define (digit? x)
     (and (memq x '(#\0 #\1 #\2 #\3 #\4 #\5 #\6 #\7 #\8 #\9)) #t))  ; TODO: vs digit abbrv above?
@@ -101,8 +100,8 @@
  
 
 (define lang-lexer
-  (lexer-src-pos
-   ; Pairs of ("string seen in input" token-to-return)
+  (lexer-src-pos ; Pairs of ("string seen in input" token-to-return)
+   
    ; The very core stuff:
    ((eof) (token-eof)) ; End-of-file
    (comment (return-without-pos (lang-lexer input-port))) ; Skip over comments
@@ -122,18 +121,20 @@
    ("\"" (return-without-pos (string-lexer input-port start-pos)))
    
    ; See something that's a bunch of digits? Turn it into a number:
-   ((:+ digit) (token-integer (string->number lexeme)))
+   ((:+ digit) ; TODO: decimal point too?
+    (token-integer (string->number lexeme)))
    
-   ; TODO: handle more core Scheme keywords:
-   ;("if" (token-if))
-   ;("else" (token-else))
-   ;("do" (token-do))
-   ;("lambda" (token-lambda))
+   ; core Scheme keywords:
+   ("cond" (token-cond))
+   ("define" (token-define))
+   ("else" (token-else))
+   ("lambda" (token-lambda))
+   ;TODO: handle more
    ;("let" (token-let))
    
-   ; An identifier is anything that is not one of the previous keywords, and starts with a letter, then letters or numbers:
-   ((:: alphabetic (:* alphabetic digit #\")) (token-identifier (string->symbol lexeme)))  ; TODO: can use 'symbolic abbrev instead?
-;TODO: wait, what is that \" doing in there!?  But just about every other special char *should* be in there
+   ; An identifier is anything that is not one of the previous keywords, and starts with a letter, then letters or numbers or certain other chars:
+   ((:: alphabetic (:* alphabetic digit #\- #\_ #\< #\> #\/ #\? #\! #\* #\+ #\= ))
+    (token-identifier (string->symbol lexeme)))  ; TODO: can use 'symbolic abbrev instead?
    
    (any-char (error "Unknown token"))  ; This prevents "Warning: lexer can accept the empty string."
    
