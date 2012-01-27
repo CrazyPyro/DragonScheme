@@ -22,29 +22,30 @@
    ;TODO: Rest of R5RS: cadr (and variants), call-with-current-continuation call-with-input-file call-with-output-file call-with-values ceiling, char (all variants), define-syntax dynamic-wind for-each let-syntax letrec-syntax syntax-rules
    ))
 
-    ; For external interface to this module:
-  ; Take a string, or a string opened as a port, and run the lexer on it.
-  ;(provide/contract
-  ; (lex (-> (or/c string? port?) position-token?)) ; TODO: was originally expression?
-  ; (make-token (-> (or/c string? symbol? integer?) token?))
-  ; ) 
+  ; For external interface to this module:
+  (provide/contract ; These take a string, or a string opened as a port:
+   (lex (-> (or/c string? port?) (-> position-token?))) ;procedure?  This is used by the parser.
+   (lex-all (-> (or/c string? port?) sequence?)) ) ; Similar, but for use by the unit tests.
+  (provide lang-tokens lang-empty-tokens) ; The parser also needs to know about all of the lexer's tokens.
+  
   ; Shortcut instead of the above.  Just export everything;
-  (provide (all-defined-out))
-  (provide (for-syntax (all-defined-out))) ; need this too, to properly export macro-defined things
+  ;(provide (all-defined-out))
+  ;(provide (for-syntax (all-defined-out))) ; need this too, to properly export macro-defined things
   
   (define (lex p/s)
-    (let ((port (if (string? p/s) (open-input-string p/s) p/s)))
+    (let ((port (if (string? p/s) (open-input-string p/s) p/s))) ; If string, convert to port.
       (port-count-lines! port)
-      (lambda () (lang-lexer port)) ;(lang-lexer port)
+      (lambda () (lang-lexer port))
       ))
   
   ;Returns a sequence (of tokens) whose elements are produced by calling lang-lexer on port.
   ;Note that once it runs out of characters to lex, or will return 'eof ad infinum, so caller needs to watch for this.
   (define (lex-all p/s)
-    (let ((port (if (string? p/s) (open-input-string p/s) p/s)))
+    (let ((port (if (string? p/s) (open-input-string p/s) p/s))) ; If string, convert to port.
       (port-count-lines! port)
-      (in-port (lambda (port) (lang-lexer port)) port)
+      (in-port (lambda (p) (lang-lexer p)) port) ;TODO: (lambda () (lang-lexer p)) -> (lex p) ; (lang-lexer p) -> ((lex p))
       ))
+  
   
 ; Some abbreviations for convenience:
 ;TODO: also use define-lex-trans macro?

@@ -17,29 +17,30 @@
   ;http://www.antlr.org/wiki/display/ANTLR3/Quick+Starter+on+Parser+Grammars+-+No+Past+Experience+Required
 
   ; For external interface to this module:
-  ; (provide/contract (parse (-> (or/c string? port?) expression?)))
+  (provide/contract (parse (-> (or/c string? port?) (or/c list? pair?)))) ; TODO: replace list? with custom AST type
  
   ; Shortcut instead of the above.  Just export everything;
-  (provide (all-defined-out))
-  (provide (for-syntax (all-defined-out))) ; need this too, to properly export macro-defined things
+  ;(provide (all-defined-out))
+  ;(provide (for-syntax (all-defined-out))) ; need this too, to properly export macro-defined things
 
   
 (define (parse p/s)
- (let ((port (if (string? p/s) (open-input-string p/s) p/s)))
+ (let ((port (if (string? p/s) (open-input-string p/s) p/s))) ; If string, convert to port.
   (port-count-lines! port)
-  (lang-parser (lambda () (lang-lexer port)))))
+  (lang-parser (lex port) )))
 
 ;AST helpers for the grammar
   ;TODO: llvm code generation
 (define (make-definition lhs rhs)
   (cons lhs rhs))
 (define (make-identifier name)
-  name)
+  (list name))
 (define (make-string name)
-  name)
+  (list name))
 (define (make-integer name)
-  name)
-
+  (list name))
+(define (make-procedure params body)
+  (cons params body))
   
 (define lang-parser
   ;A function which takes a function that produces tokens (the lexer function), and returns the parse tree created by the semantic actions.
@@ -68,12 +69,17 @@
     (expression
       ((identifier) (make-identifier $1))
       ((constant) $1)
-      ;((expression expression) (cons $1 $2))
+      ;((open-paren lambda param-list expression close-paren) (make-procedure $3 $4)) ; TODO: causes 2 shift/reduce conflicts
       )
     
     (constant
       ((string) (make-string $1))
       ((integer) (make-integer $1))
+      )
+    
+    (param-list ; A list of 0 or more identifiers
+      (() (empty))
+      ((identifier param-list) (cons $1 $2))
       )
     
     
