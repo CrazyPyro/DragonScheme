@@ -10,6 +10,12 @@
     (check-equal? (parse "(define is-5? 4)") (cons 'is-5? 4) "Simple integer definition")
     (check-equal? (parse "(define is-5? x)") (cons 'is-5? 'x) "Simple variable definition")
     (check-equal? (parse "(define is-5? \"yes!\")") (cons 'is-5? "yes!") "Simple string definition")
+    
+    (check-equal? (parse "x") 'x "Just an identifier")
+    (check-equal? (parse "5") 5 "Just an integer")
+    (check-equal? (parse "\"yes!\"") "yes!" "Just a string literal")
+    
+    
  ))
   
 (require rackunit/text-ui)

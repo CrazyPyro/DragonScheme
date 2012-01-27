@@ -35,6 +35,11 @@
   (cons lhs rhs))
 (define (make-identifier name)
   name)
+(define (make-string name)
+  name)
+(define (make-integer name)
+  name)
+
   
 (define lang-parser
   ;A function which takes a function that produces tokens (the lexer function), and returns the parse tree created by the semantic actions.
@@ -46,20 +51,30 @@
     ; whose car can be a list of tokens and/or other grammar rules to match,
     ; and whose cdr is an action to take.
     
+    
+    (scheme
+      ((definition) $1)
+      ((expression) $1) )
+    
     (definition ; The keyword "define" distinguishes definitions from expressions. 
-      ((open-paren define identifier expr close-paren)
+      ((open-paren define identifier expression close-paren)
       (make-definition $3 $4)))
     
     ;The category of expressions consists of six alternatives: 
-    ;variables, constants, primitive applications, (function) applications, and two varieties of conditionals.
+    ;variables, constants,
+    ;primitive applications, (function) applications, and two varieties of conditionals.
     ;The last four are again composed of other expressions.
     ;The keyword cond distinguishes conditional expressions from primitive and function applications. 
-    (expr
+    (expression
       ((identifier) (make-identifier $1))
-       ((string) (make-identifier $1))
-       ((integer) (make-identifier $1))
-       )
+      ((constant) $1)
+      ;((expression expression) (cons $1 $2))
+      )
     
+    (constant
+      ((string) (make-string $1))
+      ((integer) (make-integer $1))
+      )
     
     
     ) ; end of grammar
@@ -84,7 +99,7 @@
     )
    
    (tokens lang-tokens lang-empty-tokens) ; Make all of the tokens defined in lexer.rkt available to the parser.
-   (start definition) ; A list of starting non-terminals for the grammar. A separate parse function is returned for each, in a list.
+   (start scheme) ; A list of starting non-terminals for the grammar. A separate parse function is returned for each, in a list.
                 ; In this case, just expr - so a single parse function.
    (src-pos) ; Tell the parser to expect the format produced by a (lexer-src-pos) rather than a plain (lexer)
    (error ; Specify a parser error handler function - to be called if the parser encounters an error.
