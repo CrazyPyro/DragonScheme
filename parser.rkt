@@ -1,9 +1,10 @@
 (module parser racket
-  (require racket/list ;for definition of "empty"
+  (require
          racket/contract ; for provide/contract  TODO: not currently used
          parser-tools/yacc ; for parser. See docs: http://docs.racket-lang.org/parser-tools/Parsers.html
          parser-tools/lex ; Need some of the lexer tools for use in the parser. (position-line and position-col)
          "lexer.rkt" ; the lexer
+         "ast.rkt" ;AST helpers for the grammar
          )
 ; Note from Racket docs:
   ;Each time the Racket code for a parser is compiled (e.g. when a ".rkt" file containing a parser form is loaded), the parser generator is run.
@@ -28,21 +29,6 @@
  (let ((port (if (string? p/s) (open-input-string p/s) p/s))) ; If string, convert to port.
   (port-count-lines! port)
   (lang-parser (lex port) )))
-
-;AST helpers for the grammar
-  ;TODO: llvm code generation
-(define (make-definition lhs rhs)
-  (cons lhs rhs))
-(define (make-identifier name)
-  (list name))
-(define (make-string name)
-  (list name))
-(define (make-integer name)
-  (list name))
-(define (make-procedure params body)
-  (cons params body))
-(define (make-procedure-application name args)
-  (list 'procedure name args))
 
   
 (define lang-parser
