@@ -41,6 +41,9 @@
   (list name))
 (define (make-procedure params body)
   (cons params body))
+(define (make-procedure-application name args)
+  (list 'procedure name args))
+
   
 (define lang-parser
   ;A function which takes a function that produces tokens (the lexer function), and returns the parse tree created by the semantic actions.
@@ -53,7 +56,7 @@
     ; and whose cdr is an action to take.
     
     
-    (scheme
+    (scheme ; The main non-terminal: Scheme is composed of definitions and expressions.
       ((definition) $1)
       ((expression) $1) )
     
@@ -62,14 +65,15 @@
       (make-definition $3 $4)))
     
     ;The category of expressions consists of six alternatives: 
-    ;variables, constants,
-    ;primitive applications, (function) applications, and two varieties of conditionals.
+    ;variables (identifiers), constants, (function) applications,
+    ;primitive applications, and two varieties of conditionals.
     ;The last four are again composed of other expressions.
     ;The keyword cond distinguishes conditional expressions from primitive and function applications. 
     (expression
       ((identifier) (make-identifier $1))
       ((constant) $1)
-      ;((open-paren lambda param-list expression close-paren) (make-procedure $3 $4)) ; TODO: causes 2 shift/reduce conflicts
+      ((open-paren lambda open-paren param-list close-paren expression close-paren) (make-procedure $4 $6))
+      ((open-paren identifier arg-list close-paren) (make-procedure-application $2 $3)) ;TODO: procedure, not identifier - could apply a lambda.
       )
     
     (constant
@@ -78,8 +82,14 @@
       )
     
     (param-list ; A list of 0 or more identifiers
-      (() (empty))
-      ((identifier param-list) (cons $1 $2))
+      (() '()) ; empty param list
+      ((identifier param-list) (cons (make-identifier $1) $2))
+      )
+    
+    (arg-list ; A list of 0 or more arguments to which to apply a procedure
+      (() '()) ; empty arg list
+      ((identifier arg-list) (cons (make-identifier $1) $2))
+      ((constant arg-list) (cons (make-identifier $1) $2)) ; TODO: shouldn't be make-identifier
       )
     
     
@@ -89,10 +99,10 @@
    ;States with multiple shift/reduce or reduce/reduce conflicts (or some combination thereof) are not resolved with precedence.
    (precs 
     ;An assoc must be one of left, right or nonassoc.
-    (left open-paren) 
-    (nonassoc open-brace close-brace
-              open-bracket close-bracket
-              close-paren ) ; TODO: open-paren?  Pry not, since it is specified as left.
+    (left open-paren open-brace open-bracket) 
+    (nonassoc  close-brace
+               close-bracket
+              close-paren )
     ;(left else)
     ;(right assignment)
     ;(left or)
