@@ -13,9 +13,12 @@
 (define (make-integer name)
   (list name))
 (define (make-procedure params body)
-  (cons params body))
+  (list 'procedure params body))
 (define (make-procedure-application name args)
-  (list 'procedure name args))
+  (list 'proc-apply name args))
+(define (make-cond cond-clause cond-clauses)
+  (list 'cond cond-clause cond-clauses))
+(define (make-cond-clause question answer)
+  (list question answer))
 
   )
-

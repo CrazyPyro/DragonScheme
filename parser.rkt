@@ -16,7 +16,8 @@
   ;http://stackoverflow.com/questions/3146771/building-lisp-scheme-like-parse-tree-with-flex-bison
   ;http://stackoverflow.com/questions/517113/lisp-grammar-in-yacc
   ;http://www.antlr.org/wiki/display/ANTLR3/Quick+Starter+on+Parser+Grammars+-+No+Past+Experience+Required
-
+  ;http://docs.racket-lang.org/reference/syntax-model.html#%28part._expansion%29
+  
   ; For external interface to this module:
   (provide/contract (parse (-> (or/c string? port?) (or/c list? pair?)))) ; TODO: replace list? with custom AST type
  
@@ -59,7 +60,10 @@
       ((identifier) (make-identifier $1))
       ((constant) $1)
       ((open-paren lambda open-paren param-list close-paren expression close-paren) (make-procedure $4 $6))
-      ((open-paren identifier arg-list close-paren) (make-procedure-application $2 $3)) ;TODO: procedure, not identifier - could apply a lambda.
+      ;TODO: procedure, not just identifier - could apply a lambda.
+      ; TODO: Can't nest applications: ((
+      ((open-paren identifier arg-list close-paren) (make-procedure-application $2 $3))
+      ((open-paren cond cond-clause cond-clauses close-paren) (make-cond $3 $4))
       )
     
     (constant
@@ -78,6 +82,14 @@
       ((constant arg-list) (cons (make-identifier $1) $2)) ; TODO: shouldn't be make-identifier
       )
     
+    (cond-clauses ; A list of 1 or more question.answer clauses
+      ((cond-clause) $1)
+      ((cond-clause cond-clauses) (list $1 $2))
+      )
+    (cond-clause
+     ((open-paren expression expression close-paren) (make-cond-clause $2 $3))
+     )
+     
     
     ) ; end of grammar
    
@@ -86,18 +98,9 @@
    (precs 
     ;An assoc must be one of left, right or nonassoc.
     (left open-paren open-brace open-bracket) 
-    (nonassoc  close-brace
-               close-bracket
+    (nonassoc close-brace
+              close-bracket
               close-paren )
-    ;(left else)
-    ;(right assignment)
-    ;(left or)
-    ;(left and)
-    ;(nonassoc comparison equal not-equal)
-    ;(left plus)
-    ;(left */)
-    ;(nonassoc minus)    
-    ;(right arrow)
     )
    
    (tokens lang-tokens lang-empty-tokens) ; Make all of the tokens defined in lexer.rkt available to the parser.
