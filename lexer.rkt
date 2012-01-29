@@ -48,14 +48,29 @@
   
   
 ; Some abbreviations for convenience:
-;TODO: also use define-lex-trans macro?
 (define-lex-abbrevs
-  (digit (char-set "0123456789")) ; (:/ #\0 #\9)
+  (digit (:/ #\0 #\9)) ; 0-9
+  (number (::
+           ;(:? "+-") ; TODO: Include " . + - " per R5RS 2.3
+           (:+ digit)))
+  
+  ; Per R5RS 2.1, an identifier starts with a letter or one of these "extended alphabetic characters."
+  (intentifier-inital (:+ alphabetic #\_ #\< #\> #\/ #\? #\! #\* #\= #\$ #\% #\& #\: #\@ #\^ #\~ )) ; not including `,'\"|()[]{};
+  ;  And any following characers can also be number characters ( + - . digit)
+  (identifier-full (:or
+                    (:: intentifier-inital (:* intentifier-inital digit #\+ #\- #\. )) ; general case
+                    ; Special case to above, these are valid identifiers: ... + . -
+                    ;(:= 1 #\+) (:= 1 #\-) ; TODO: + and - here are clashing with those in 'number
+                    (:= 1 #\.) (:= 3 #\.) ; TODO: These might also clash, once decimals are supported in 'number
+                    ))
+  
+  ; Per R5RS 2.2:
   (any-whitespace (:+ whitespace)) ; All whitespace is identical, no matter how much of it there is. ;TODO was *
   (comment (:: ";" ; comments start with ;
                     (:* (:~ "\n")) ; and go to end of line
                     ;; Chomp the newline at the end, if it's there.  (Last line of the file could be a comment without a newline)
-                    (:? "\n" "\r"))))
+                    (:? "\n" "\r")))
+)
 
 
 ; String lexer is used by the main lexer
@@ -118,12 +133,11 @@
    ("}" (token-close-brace))
    ("|" (token-pipe))
   
+   ; Constants/literals:
+   (number (token-integer (string->number lexeme)))
    ; See a quote?  Call the helper to lex out the string literal:
    ("\"" (return-without-pos (string-lexer input-port start-pos)))
    
-   ; See something that's a bunch of digits? Turn it into a number:
-   ((:+ digit) ; TODO: decimal point too?
-    (token-integer (string->number lexeme)))
    
    ; core Scheme keywords:
    ("cond" (token-cond))
@@ -133,9 +147,8 @@
    ;TODO: handle more
    ;("let" (token-let))
    
-   ; An identifier is anything that is not one of the previous keywords, and starts with a letter, then letters or numbers or certain other chars:
-   ((:: alphabetic (:* alphabetic digit #\- #\_ #\< #\> #\/ #\? #\! #\* #\+ #\= ))
-    (token-identifier (string->symbol lexeme)))  ; TODO: can use 'symbolic abbrev instead?
+   ; Anything that looks like an identifier AND is not one of the previous keywords, is an identifier.
+   (identifier-full (token-identifier (string->symbol lexeme)))
    
    (any-char (error "Unknown token"))  ; This prevents "Warning: lexer can accept the empty string."
    
