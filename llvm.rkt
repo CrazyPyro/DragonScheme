@@ -1,8 +1,10 @@
 (module code-gen racket
-  (require "racket-llvm/llvm.rkt" ; racket-llvm library
-         "parser.rkt" ; The parser
+  (require
+         racket/contract ; for provide/contract
+         "racket-llvm/llvm.rkt" ; racket-llvm library
+         "ast.rkt"
          )
-  ;; racket-llvm/llvm.rkt depends on some  C++ bindings.
+  ;; racket-llvm/llvm.rkt depends on some C++ bindings.
   ;; Copy/symlink racket-llvm.Makefile to racket-llvm/Makefile and run make.
   ;; (Otherwise it throws an error complaining "llvm-racket.so" can't be found.)
   ;; If you then get a "wrong ELF class" error, change -m32 to -m64 (or viceversa) in the Makefile and recompile.
@@ -13,15 +15,19 @@
   ; or some other way to model this. Again, this tutorial won't dwell on good software engineering practices" - Kaleidoscope
   ; ^ This is what this module does: visit/map all nodes of the AST, emitting IR for each one.
   
-  (displayln (string-append "Generating code using LLVM version: " llvm-version-string)) ; For debugging.
+  ; For external interface to this module:
+  ;(provide/contract (code-gen (-> ((list?) (string?) (boolean?) (boolean?)) (number?))))
+  (provide (all-defined-out))
+  
+  (define (code-gen code-ast outfilename verbose-mode exec-mode)
+  
+  (cond (verbose-mode (displayln (string-append "Generating code using LLVM version: " llvm-version-string))))
   
   (define context (LLVMContextCreate)) ; LLVMGetGlobalContext
   
   ;"The LLVM construct that contains all of the functions and global variables in a chunk of code.
   ; In many ways, it is the top-level structure that the LLVM IR uses to contain code."
-  (define module (LLVMModuleCreateWithNameInContext "neil-module" context))
-  
-  ;Value *ErrorV(const char *Str) { Error(Str); return 0; }
+  (define module (LLVMModuleCreateWithNameInContext "neil-module" context)) ; TODO: What should this name be?
   
   ;"A helper object that makes it easy to generate LLVM instructions. [...]
   ;  keep track of the current place to insert instructions and has methods to create new instructions." - Kaleidoscope
@@ -64,29 +70,35 @@
            (b (LLVMBuildAdd builder one a "b")) ; one instead of z
            )
       (LLVMBuildRet builder b))
-    (LLVMDumpModule module) ; TODO: I think this is called only once at end, not for every block...
+    (cond (verbose-mode (LLVMDumpModule module))) ; TODO: I think this is called only once at end, not for every block...
     (LLVMDisposeBuilder builder)
-    func ; experimantal: return func object to caller
+    func ; experimental: return func object to caller
   )
   
   ; Every program needs a function called "main"
   (define main
     (codegen-function "main" (LLVMFunctionType int-type (list int-type) 1)))
   
-  (let-values (((err) (LLVMVerifyModule module 'LLVMReturnStatusAction)))
+  (let-values (((err) (LLVMVerifyModule module 'LLVMReturnStatusAction))) ; This is where the 0 in the console output comes from.
     (when err
-      (display err) (exit 1)))
+      (display err) (exit -1)))
   (LLVMLinkInJIT) ; or (LLVMLinkInInterpreter)
   
-  (LLVMWriteBitcodeToFile module "tmp.ll") ; to test, run 'lli ~/tmp.ll'
-  
+  (cond (verbose-mode (displayln (string-append "Writing file: " outfilename))))
+  (LLVMWriteBitcodeToFile module outfilename)
+    
   ; run inline:
-  (define (test-run)
+  (cond (exec-mode
     (let (
           (engine (LLVMCreateExecutionEngineForModule module))
           (arg1 (LLVMCreateGenericValueOfInt int-type 5 #t))
           )
       (let ((result (LLVMRunFunction engine main (list arg1))))
+        (cond (verbose-mode (displayln "Executing...")))
         (LLVMGenericValueToInt result #t))))
-  (test-run) ; for debugging
+    (else 0)) ; Return 0 for success.
+  
+  ) ; end code-gen
+  
+  
 )
