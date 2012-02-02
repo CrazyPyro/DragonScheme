@@ -13,6 +13,9 @@
     
     (check-equal? (parse "x") '(identifier x ()) "Just an identifier")
     (check-equal? (parse "5") '(integer 5 ()) "Just an integer")
+    (check-equal? (parse "+115") '(integer 115 ()) "Just a positive integer")
+    (check-equal? (parse "-2") '(integer -2 ()) "Just a negative integer")
+    
     (check-equal? (parse "\"yes!\"") '(string "yes!" ()) "Just a string literal")
     
     ;(check-exn exn:fail? (parse "(define is-5? (lambda 5))") "Lambda with syntax error")

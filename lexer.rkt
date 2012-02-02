@@ -40,26 +40,29 @@
   (define (lex-all p/s)
     (let ((port (if (string? p/s) (open-input-string p/s) p/s))) ; If string, convert to port.
       (port-count-lines! port)
-      (in-port (lambda (p) (lang-lexer p)) port) ;TODO: (lambda () (lang-lexer p)) -> (lex p) ; (lang-lexer p) -> ((lex p))
+      (in-port (lambda (p) (lang-lexer p)) port)
       ))
-  
+  ; TODO: Future replacement for the above.
+  ; But for right now, causes all 3 of the tests to fail, meaning it it probably only returning the 1st token...
+  ;(define (lex-all p/s)
+  ;   (in-port (lambda (dummy) ((lex p/s)))))
   
 ; Some abbreviations for convenience:
 (define-lex-abbrevs
   (digit (:/ #\0 #\9)) ; 0-9
   (number (::
-           ;(:? "+-") ; TODO: Include " . + - " per R5RS 2.3
+           (:? "+" "-") ; TODO: Include "." per R5RS 2.3, but this will require adding support for real numbers in the code generator.
            (:+ digit)))
   
   ; Per R5RS 2.1, an identifier starts with a letter or one of these "extended alphabetic characters."
   (intentifier-inital (:+ alphabetic #\_ #\< #\> #\/ #\? #\! #\* #\= #\$ #\% #\& #\: #\@ #\^ #\~ ))
   ; The following keyboard non-alphanumerics are not included '`,\"()[]{};|
-  ;  because they already have special meaning, respectively: quote, quasiquote, unquote, string-literal, 3 ways of delimiting expressions, comment, and reserved.
-  ;  And any following characers can also be number characters ( + - . digit)
+  ;   because they already have special meaning, respectively: quote, quasiquote, unquote, string-literal, 3 ways of delimiting expressions, comment, and reserved.
+  ; Any following characers can also be number characters ( + - . digit)
   (identifier-full (:or
                     (:: intentifier-inital (:* intentifier-inital digit #\+ #\- #\. )) ; general case
                     ; Special case to above, these are valid identifiers: ... + . -
-                    ;(:= 1 #\+) (:= 1 #\-) ; TODO: + and - here are clashing with those in 'number
+                    (:= 1 #\+) (:= 1 #\-) ; TODO: + and - here are clashing with those in 'number
                     (:= 1 #\.) (:= 3 #\.) ; TODO: These might also clash, once decimals are supported in 'number
                     ))
   

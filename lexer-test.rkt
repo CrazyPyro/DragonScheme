@@ -2,8 +2,6 @@
   (require rackunit
          parser-tools/lex ; Need some of the lexer tools for use in testing the lexer.
          "lexer.rkt" ; The lexer under test
-         racket/match ; For strip-pos function
-         (for-syntax racket/base syntax/parse) ; 
          )
   
   
@@ -36,12 +34,12 @@
     (test-lexing "(" (list 'open-paren) "one open paren")
     (test-lexing ")" (list 'close-paren) "one close paren")
     (test-lexing "5" (list 'integer) "one integer")
-    ;(test-lexing "+5" (list 'integer) "positive integer")
-    ;(test-lexing "-5" (list 'integer) "negative integer")
+    (test-lexing "+5" (list 'integer) "positive integer")
+    (test-lexing "-5" (list 'integer) "negative integer")
     (test-lexing "; (5)" (list 'eof) "only a comment")
     (test-lexing "hello" (list 'identifier) "one identifier")
-    ;(test-lexing "+" (list 'identifier) "identifier +")
-    ;(test-lexing "-" (list 'identifier) "identifier -")
+    (test-lexing "+" (list 'identifier) "identifier +")
+    (test-lexing "-" (list 'identifier) "identifier -")
     (test-lexing "." (list 'identifier) "identifier .")
     (test-lexing "..." (list 'identifier) "identifier ...")
     (test-lexing "!$aSd%&*+-./:<=>?@^_42~" (list 'identifier) "identifier crazy")
@@ -67,20 +65,7 @@
     (test-lexing "(ident (5) [] \"str\" ) ; this is a comment"
                   (list 'open-paren 'identifier 'open-paren 'integer 'close-paren)
                   "Should fail - got more than we were expecting")
-    
-     
-     
-    ;(check-pred position-token? ((lex "")) "Lex empty list")
-    ;(check-equal? (strip (lex "5"))
-    ;           (list (make-token 5)))
-    ;(check-equal? (strip (lex "4"))
-    ;           (list (make-token 5)))
-    ;;)
-  ;(check-equal? (strip (lex-all "5"))
-  ;              (list (token-integer 5)) "Lex 5")
-  ;(check-equal? (strip (lex-all "5 8"))
-  ;              (list (token-integer 5) (token-integer 8)) "Lex 5 8")
-  
+      
   ))
     
  
