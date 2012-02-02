@@ -1,6 +1,6 @@
 (module parser racket
   (require
-         racket/contract ; for provide/contract  TODO: not currently used
+         racket/contract ; for provide/contract
          parser-tools/yacc ; for parser. See docs: http://docs.racket-lang.org/parser-tools/Parsers.html
          parser-tools/lex ; Need some of the lexer tools for use in the parser. (position-line and position-col)
          "lexer.rkt" ; the lexer
@@ -12,6 +12,7 @@
   
 ; See also: R5RS Chapter 7 - Formal syntax and semantics
 ; http://www.schemers.org/Documents/Standards/R5RS/HTML/r5rs-Z-H-10.html#%_chap_7
+  ; Racket grammar: http://docs.racket-lang.org/reference/syntax-model.html#%28tech._expansion%29
 ;http://ragnermagalhaes.blogspot.com/2007/08/bison-lisp-grammar.html
   ;http://stackoverflow.com/questions/3146771/building-lisp-scheme-like-parse-tree-with-flex-bison
   ;http://stackoverflow.com/questions/517113/lisp-grammar-in-yacc
@@ -19,12 +20,7 @@
   ;http://docs.racket-lang.org/reference/syntax-model.html#%28part._expansion%29
   
   ; For external interface to this module:
-  (provide/contract (parse (-> (or/c string? port?) (or/c list? pair?)))) ; TODO: replace list? with custom AST type
- 
-  ; Shortcut instead of the above.  Just export everything;
-  ;(provide (all-defined-out))
-  ;(provide (for-syntax (all-defined-out))) ; need this too, to properly export macro-defined things
-
+  (provide/contract (parse (-> (or/c string? port?) list?)))
   
 (define (parse p/s)
  (let ((port (if (string? p/s) (open-input-string p/s) p/s))) ; If string, convert to port.
@@ -49,21 +45,26 @@
     
     (definition ; The keyword "define" distinguishes definitions from expressions. 
       ((open-paren define identifier expression close-paren)
-      (make-definition $3 $4)))
+       (make-definition $3 $4)))
     
-    ;The category of expressions consists of six alternatives: 
-    ;variables (identifiers), constants, (function) applications,
-    ;primitive applications, and two varieties of conditionals.
-    ;The last four are again composed of other expressions.
+    ;The category of expressions consists of: 
+    ;variables (identifiers), constants,
+    ;(function) applications, primitive applications, and conditionals.
+    ;The last three are again composed of other expressions.
     ;The keyword cond distinguishes conditional expressions from primitive and function applications. 
     (expression
-      ((identifier) (make-identifier $1))
+      ((identifier)
+       (make-identifier $1))
       ((constant) $1)
-      ((open-paren lambda open-paren param-list close-paren expression close-paren) (make-procedure $4 $6))
-      ;TODO: procedure, not just identifier - could apply a lambda.
-      ; TODO: Can't nest applications: ((
-      ((open-paren identifier arg-list close-paren) (make-procedure-application $2 $3))
-      ((open-paren cond cond-clause cond-clauses close-paren) (make-cond $3 $4))
+      ((procedure) $1)
+      ;Apply named procedure:
+      ((open-paren identifier arg-list close-paren)
+       (make-procedure-application $2 $3))
+      ;Apply an anonymous procedure (in-line lambda): ;TODO: Does this require an auto-generated unique name?
+      ((open-paren procedure arg-list close-paren)
+       (make-procedure-application $2 $3))
+      ((open-paren cond cond-clauses close-paren)
+       (make-cond $3))
       )
     
     (constant
@@ -71,23 +72,31 @@
       ((integer) (make-integer $1))
       )
     
+    (procedure
+      ((open-paren lambda open-paren param-list close-paren expression close-paren)
+        (make-procedure $4 $6))
+      )
+    
     (param-list ; A list of 0 or more identifiers
       (() '()) ; empty param list
-      ((identifier param-list) (cons (make-identifier $1) $2))
+      ((identifier param-list) (cons $1 $2))
       )
     
-    (arg-list ; A list of 0 or more arguments to which to apply a procedure
+    (arg-list ; A list of 0 or more arguments (expressions) to which to apply a procedure
       (() '()) ; empty arg list
-      ((identifier arg-list) (cons (make-identifier $1) $2))
-      ((constant arg-list) (cons (make-identifier $1) $2)) ; TODO: shouldn't be make-identifier
+      ((expression arg-list) (cons $1 $2))
       )
     
-    (cond-clauses ; A list of 1 or more question.answer clauses
-      ((cond-clause) $1)
-      ((cond-clause cond-clauses) (list $1 $2))
+    (cond-clauses ; A list of 0* or more question.answer clauses
+      (() '()) ; empty arg list *Should be 1-or-more, but this is much easier to parse reliably.
+      ;((cond-clause) $1)
+      ((cond-clause cond-clauses)
+       (cons $1 $2))
       )
+    
     (cond-clause
-     ((open-paren expression expression close-paren) (make-cond-clause $2 $3))
+     ((open-paren expression expression close-paren)
+      (make-cond-clause $2 $3))
      )
      
     
@@ -122,7 +131,7 @@
        (position-col  start-pos)
        (position-line end-pos)
        (position-col  end-pos)))))
-   (debug "parser.debug.txt") ;Optional debugging output file 
+   (debug "debug-parser.log") ;Optional debugging output file 
    (end eof))) ;parsing ends when the eof token is encountered.
   ;End of parser
 

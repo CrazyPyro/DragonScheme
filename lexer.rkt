@@ -2,7 +2,7 @@
   
   (require parser-tools/lex
          racket/list ;for definition of "empty" - used once.
-         racket/contract ; for provide/contract   TODO: not currently used
+         racket/contract ; for provide/contract
          (prefix-in : parser-tools/lex-sre)) ;pre-defined abbreviations for lexer regexs (all prefixed with a : per Racket docs)
 
 ; These are things we need to process further to get the "value" of once we recognize them:
@@ -28,9 +28,6 @@
    (lex-all (-> (or/c string? port?) sequence?)) ) ; Similar, but for use by the unit tests.
   (provide lang-tokens lang-empty-tokens) ; The parser also needs to know about all of the lexer's tokens.
   
-  ; Shortcut instead of the above.  Just export everything;
-  ;(provide (all-defined-out))
-  ;(provide (for-syntax (all-defined-out))) ; need this too, to properly export macro-defined things
   
   (define (lex p/s)
     (let ((port (if (string? p/s) (open-input-string p/s) p/s))) ; If string, convert to port.
@@ -55,7 +52,9 @@
            (:+ digit)))
   
   ; Per R5RS 2.1, an identifier starts with a letter or one of these "extended alphabetic characters."
-  (intentifier-inital (:+ alphabetic #\_ #\< #\> #\/ #\? #\! #\* #\= #\$ #\% #\& #\: #\@ #\^ #\~ )) ; not including `,'\"|()[]{};
+  (intentifier-inital (:+ alphabetic #\_ #\< #\> #\/ #\? #\! #\* #\= #\$ #\% #\& #\: #\@ #\^ #\~ ))
+  ; The following keyboard non-alphanumerics are not included '`,\"()[]{};|
+  ;  because they already have special meaning, respectively: quote, quasiquote, unquote, string-literal, 3 ways of delimiting expressions, comment, and reserved.
   ;  And any following characers can also be number characters ( + - . digit)
   (identifier-full (:or
                     (:: intentifier-inital (:* intentifier-inital digit #\+ #\- #\. )) ; general case
@@ -73,9 +72,9 @@
 )
 
 
-; String lexer is used by the main lexer
+; String lexer is used by the main lexer to lex out quoted string-literals.
   ;; Taken verbatim from endobson's "Tiger" lexer
-(define (string-lexer port start-pos)
+(define (string-lexer port start-pos) ; TODO: (define string-lexer (lexer-src-pos
   (define (digit? x)
     (and (memq x '(#\0 #\1 #\2 #\3 #\4 #\5 #\6 #\7 #\8 #\9)) #t))  ; TODO: vs digit abbrv above?
 
@@ -149,8 +148,9 @@
    
    ; Anything that looks like an identifier AND is not one of the previous keywords, is an identifier.
    (identifier-full (token-identifier (string->symbol lexeme)))
+
    
-   (any-char (error "Unknown token"))  ; This prevents "Warning: lexer can accept the empty string."
+   (any-char (error (string-append "Unknown token: " lexeme)))  ; This prevents "Warning: lexer can accept the empty string."
    
    )) ; end of lexer
 
