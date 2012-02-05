@@ -65,7 +65,15 @@
     (test-lexing "(ident (5) [] \"str\" ) ; this is a comment"
                   (list 'open-paren 'identifier 'open-paren 'integer 'close-paren)
                   "Should fail - got more than we were expecting")
-      
+    
+    (test-lexing "(begin)"
+      '(open-paren begin close-paren)
+      "empty begin")
+    (test-lexing "(begin 5 (\"test\"))"
+      '(open-paren begin integer open-paren string close-paren close-paren)
+      "simple begin")
+    
+    
   ))
     
  

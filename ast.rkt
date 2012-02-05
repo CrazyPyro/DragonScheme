@@ -26,6 +26,8 @@
       (list 'cond 'cond cond-clauses)) ; 2nd 'cond is unused placeholder.
     (define (make-cond-clause question answer)
       (list 'cond-clause 'cond-clause (list question answer)))
-    
+    ;TODO: unique nodes for question and answer
+    (define (make-begin exps)
+      (list 'compound-expression exps))
   
 ) ; end module

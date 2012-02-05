@@ -15,9 +15,9 @@
    eof open-paren close-paren open-bracket close-bracket open-brace close-brace pipe
    ;TODO: period (for dot-notation) elipsis (... notating varargs)
    ; Tokens for core Scheme keywords:
-   cond define else lambda
+   begin cond define else lambda
    ;TODO: 'quote #t #f
-   ;TODO: and begin car case cons cdr  delay display do  if  let let* letrec or 
+   ;TODO: and car case cons cdr  delay display do  if  let let* letrec or 
    ;TODO:  map, set, quasiquote, unquote, unquote-splicing
    ;TODO: Rest of R5RS: cadr (and variants), call-with-current-continuation call-with-input-file call-with-output-file call-with-values ceiling, char (all variants), define-syntax dynamic-wind for-each let-syntax letrec-syntax syntax-rules
    ))
@@ -142,6 +142,7 @@
    
    
    ; core Scheme keywords:
+   ("begin" (token-begin))
    ("cond" (token-cond))
    ("define" (token-define))
    ("else" (token-else))

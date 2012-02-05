@@ -63,8 +63,12 @@
       ;Apply an anonymous procedure (in-line lambda): ;TODO: Does this require an auto-generated unique name?
       ((open-paren procedure arg-list close-paren)
        (make-procedure-application $2 $3))
+      ;Cond:
       ((open-paren cond cond-clauses close-paren)
        (make-cond $3))
+      ;Begin: A compound expression composed of each arg-list expression executed in turn.
+      ((open-paren begin arg-list close-paren)
+       (make-begin $3))
       )
     
     (constant

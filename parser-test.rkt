@@ -101,6 +101,17 @@
             y))))
       "Proc-apply within Cond within nested procedures")
     
+    (check-equal? 
+      (parse "(begin)")
+      '(compound-expression ())
+      "empty begin")
+    
+    (check-equal? 
+      (parse "(begin 5 ((lambda() 2)))")
+      '(compound-expression ((integer 5 ())
+                (proc-apply (procedure procedure ((integer 2 ()))) ())))
+      "begin: int + proc-apply")
+    
  ))
   
 (require rackunit/text-ui)
