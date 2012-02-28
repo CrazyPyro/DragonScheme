@@ -9,6 +9,8 @@
          "llvm.rkt"
          )
 ; A web front-end to the compiler.
+
+(define dragonscheme-url "/dragonscheme")
  
 ; A compilation is a (make-compilation src ir)
 (struct compilation (src ast ir))
@@ -47,9 +49,15 @@
 (define (render-compiler-page a-compilation request)
   (local [(define (response-generator make-url)
             (response/xexpr
-             `(html (head (title "DragonScheme web compiler"))
+             `(html (head
+			(title "DragonScheme web compiler")
+			(link ((rel "stylesheet")
+				(href "/style.css")
+				(type "text/css"))))
                     (body
                      (h1 "DragonScheme")
+                     (h2 "Web Demo")
+			(p (a ((href ,dragonscheme-url)) "Reset page"))
                      (form ((action
                              ,(make-url insert-compilation-handler)))
                            (textarea ((name "src") (rows "20") (cols "80")) "(define type-your scheme-here)" )
@@ -57,13 +65,14 @@
                            )
                      ,(render-compilation a-compilation) ;Display the results of compiling the user-supplied code.
                      ))))
- 
+
           (define (insert-compilation-handler request)
             (render-compiler-page
              (parse-compilation (request-bindings request))
              request))]
  
     (send/suspend/dispatch response-generator)))
+
  
 ; render-compilation: compilation -> xexpr
 ; Consumes a compilation, produces an xexpr fragment of the compilation.
@@ -80,12 +89,14 @@
              ,(to-string (compilation-ir a-compilation)))
         ))
  
+
  (serve/servlet start
                #:stateless? #f ; #t doesn't work
                #:port 8080
                #:listen-ip #f
-               #:servlet-regexp #rx"" ; #:servlet-path "/main"
+	#:servlet-path dragonscheme-url
                #:launch-browser? #f
+	#:extra-files-paths (list (build-path "htdocs"))
                )
   
 ) ; end module
