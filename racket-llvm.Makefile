@@ -5,7 +5,10 @@
 #LLVMCONF="/usr/bin/env llvm-config"
 
 # LLVM compilation info
-LLVMCXXFLAGS=`/usr/bin/env llvm-config --cxxflags`
+LLVMCXXFLAGS1=`/usr/bin/env llvm-config --cxxflags`
+LLVMCXXFLAGS=$(LLVMCXXFLAGS1)
+# Uncomment to work around a "'bits/c++config.h' file not found" bug in AMI Linux:
+#LLVMCXXFLAGS=-I/usr/include/c++/4.4.4/x86_64-amazon-linux ${LLVMCXXFLAGS1}
 
 LLVMLDFLAGS=`/usr/bin/env llvm-config --ldflags`
 #No - shows *.a but we only want *.so: LLVMLIBS=`/usr/bin/env llvm-config --libs`
