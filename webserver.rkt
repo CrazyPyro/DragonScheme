@@ -9,11 +9,14 @@
          "llvm.rkt"
          )
 ; A web front-end to the compiler.
-
-(define dragonscheme-url "/dragonscheme")
+; Must be launched from within DragonScheme dir, due to expectations/assumptions about relative paths.
+  ;TODO:  To enforce this, require webserver.rkt detedted in (find-system-path 'orig-dir)
+  
+(define dragonscheme-url "/dragonscheme") ; The relative URL to access this servlet
+(define tmpdir (build-path (find-system-path 'orig-dir) "tmp")) ; where to put compiler output files
  
 ; A compilation is a (make-compilation src ir)
-(struct compilation (src ast ir))
+(struct compilation (src ast ir outfile))
 
   ;A helper, to prevent complaints about the AST and IR not being xexprs.
  (define (to-string anything)
@@ -26,7 +29,7 @@
 ; web content.
 (define (start request)
   (render-compiler-page
-   (compilation "" "" "") ; Start with default/blank data
+   (compilation "" "" "" "") ; Start with default/blank data
    request))
   
  ;Return value of name in bindings, or default if it is undefined.
@@ -36,12 +39,14 @@
   
 ; parse-compilation: bindings -> compilation
 ; Extracts a compilation out of the bindings.
+  ; This is where the actual compiler routines are called.
 (define (parse-compilation bindings)
   (let*
       ((src (extract-binding-with-default 'src bindings "(define empty 0)"))
       (ast (parse src))
-      (ir (code-gen ast "" #t #t)))
-    (compilation src ast ir)))
+      (outfile (make-temporary-file "web~a.bc" #f tmpdir))
+      (ir (code-gen ast outfile #t #t)))
+    (compilation src ast ir outfile)))
 
 ; render-compiler-page: Page request -> doesn't return
 ; Consumes a compiler struct and a request, and produces an HTML page
@@ -57,7 +62,7 @@
                     (body
                      (h1 "DragonScheme")
                      (h2 "Web Demo")
-			(p (a ((href ,dragonscheme-url)) "Reset page"))
+			(p (a ((href ,dragonscheme-url)) "Click here to reset page if you get a \"page expired\" error."))
                      (form ((action
                              ,(make-url insert-compilation-handler)))
                            (textarea ((name "src") (rows "20") (cols "80")) "(define type-your scheme-here)" )
@@ -73,20 +78,46 @@
  
     (send/suspend/dispatch response-generator)))
 
- 
+; Generate links for the downloadable .bc and .ll files
+(define (download-links a-compilation)
+  (let ((outfile (compilation-outfile a-compilation)))
+    (cond
+      ((path? outfile)
+       (let* (
+            (bc-file (path->string (file-name-from-path outfile)))
+            (ll-file (string-append (substring bc-file 0 (- (string-length bc-file) 3)) ".ll")) ; replace .bc extension with .ll
+            )
+         `(p
+           (h2 "Generated LLVM IR:")
+           (pre 
+              ,(call-with-input-file (build-path tmpdir ll-file)
+                  (lambda (infile)
+                    ; TODO: 'return-linefeed is a *nix-only hack to read the whole file as one line, since the file won't contain a 'return-linefeed on *nix.
+                    (read-line infile 'return-linefeed))))
+           (h2 "Downloads:")
+           (ul (li (a ((href ,bc-file)) "Generated LLVM bitcode file (binary, execute using lli)")) ; TODO: may need to first be  linked using llvm-ld
+             (li (a ((href ,ll-file)) "Generated LLVM IR file (human-readable)")))
+           )))
+      (else "")))) ; No output file specified? Then nothing to show.
+  
+
+
+  
 ; render-compilation: compilation -> xexpr
 ; Consumes a compilation, produces an xexpr fragment of the compilation.
 (define (render-compilation a-compilation)
   `(div ((class "compilation"))
-        (h2 "Scheme source")
+        (h2 "Original Source Code:")
         (pre ((class "src"))
              ,(compilation-src a-compilation))
-        (h2 "Parsed AST")
+        (h2 "Parsed AST:")
         (pre ((class "ast"))
              ,(to-string (compilation-ast a-compilation)))
-        (h2 "(result returned by executing the) Generated LLVM IR")
+        (p ,(string-append "LLVM version on server: " (version)))
+        (h2 "Execution Result:")
         (pre ((class "ir"))
              ,(to-string (compilation-ir a-compilation)))
+        (p ,(download-links a-compilation))
         ))
  
 
@@ -96,7 +127,7 @@
                #:listen-ip #f
 	#:servlet-path dragonscheme-url
                #:launch-browser? #f
-	#:extra-files-paths (list (build-path "htdocs"))
+	#:extra-files-paths (list (build-path "htdocs") tmpdir)
                )
   
 ) ; end module

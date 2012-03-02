@@ -16,12 +16,27 @@
   ; ^ This is what this module does: visit/map all nodes of the AST, emitting IR for each one.
   
   ; For external interface to this module:
-  ;(provide/contract (code-gen (-> ((list?) (string?) (boolean?) (boolean?)) (number?))))
-  (provide (all-defined-out))
+  ;TODO: (provide/contract (code-gen (-> ((list?) (or/c path? string?) (boolean?) (boolean?)) (number?))))
+(provide (all-defined-out))
+
+; Used by webserver.rkt
+(define (version)
+  llvm-version-string)
   
-  (define (code-gen code-ast outfilename verbose-mode exec-mode)
+(define (code-gen code-ast outfile verbose-mode exec-mode)
+
+  (define llvm-dis "/usr/bin/llvm-dis") ; TODO: determine this dynamically.
   
-  (cond (verbose-mode (displayln (string-append "Generating code using LLVM version: " llvm-version-string))))
+  (define outfilename
+    (cond
+      ((path? outfile)
+       (path->string outfile))
+      (else outfile)))
+  
+  (define (debug message)
+    (cond (verbose-mode (displayln message))))
+  
+  (debug (string-append "Generating code using LLVM version: " (version)))
   
   (define context (LLVMContextCreate)) ; LLVMGetGlobalContext
   
@@ -66,12 +81,12 @@
     ;place the builder
     (LLVMPositionBuilderAtEnd builder entry)
     ;body = return x*y+z
-    (let* ((a (LLVMBuildMul builder x one "a")) ; one instead of y
+    (let* ((a (LLVMBuildMul builder x (LLVMConstInt int-type 2 false) "a")) ; const 2 instead of y
            (b (LLVMBuildAdd builder one a "b")) ; one instead of z
            )
       (LLVMBuildRet builder b))
-    (cond (verbose-mode (LLVMDumpModule module))) ; TODO: I think this is called only once at end, not for every block...
-    (LLVMDisposeBuilder builder)
+    ; TODO: I think this is called only once at end, not for every block...
+    ;(LLVMDisposeBuilder builder)
     func ; experimental: return func object to caller
   )
   
@@ -82,11 +97,23 @@
   (let-values (((err) (LLVMVerifyModule module 'LLVMReturnStatusAction))) ; This is where the 0 in the console output comes from.
     (when err
       (display err) (exit -1)))
-  (LLVMLinkInJIT) ; or (LLVMLinkInInterpreter)
   
-  (cond (verbose-mode (displayln (string-append "Writing file: " outfilename))))
+  (LLVMLinkInJIT) ; or (LLVMLinkInInterpreter)
+  (LLVMDisposeBuilder builder)
+  
+  (debug (string-append "Writing file: " outfilename))
   (LLVMWriteBitcodeToFile module outfilename)
-    
+  
+  (when verbose-mode (LLVMDumpModule module)) ; to stderr
+  ; Since LLVMDumpModule only writes to stderr, instead get LLVM IR by disassembling the bitcode file.
+  (let-values (((process out in err) (subprocess #f #f #f llvm-dis outfilename))) ; *.bc file -> *.ll file
+     (begin0
+      (close-output-port in)
+      (close-input-port err)
+      (close-input-port out)
+      (subprocess-wait process)
+      ))
+  
   ; run inline:
   (cond (exec-mode
     (let (
@@ -94,7 +121,7 @@
           (arg1 (LLVMCreateGenericValueOfInt int-type 5 #t))
           )
       (let ((result (LLVMRunFunction engine main (list arg1))))
-        (cond (verbose-mode (displayln "Executing...")))
+        (debug "Executing...")
         (LLVMGenericValueToInt result #t))))
     (else 0)) ; Return 0 for success.
   
