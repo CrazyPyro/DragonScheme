@@ -210,6 +210,33 @@
            (LLVMBuildRet builder b))) ; return it
     ))
   
+  ;TODO: look at compile-expr in Tiger's code-gen.rkt
+         (for/list ((node code-ast))
+           (case (car node)
+             ('define
+               (let* (
+                      (lhs (cadr node)) 
+                      (rhs (caddr node))
+                      (rhs-type (car rhs))
+                      (rhs-val (cadr rhs)))
+                 (case rhs-type
+                   ('integer (begin (gen-number rhs-val)))
+                   (else (debug "Define is Not an integer"))
+                 )))
+             ('procedure
+              (let* (
+                      (proc-name (cadr node))
+                      (params (caddr node))
+                      (body (cadddr node))
+                      (name (symbol->string (gensym proc-name))) ; unique; TODO: is symbol->string un-uniquing these?
+                      )
+                (debug (string-append "Define " name))
+                (gen-function int-type name (for/list ((n (in-range (length params)))) int-type)
+                     (lambda (args)
+                       (LLVMBuildRet builder (gen-number (length params)))))
+              ))
+             (else (debug "Not a Define")) ))
+  
   ; Every program needs the standard function "int main(int,char**)"
   ; This is a driver/stub/wrapper that calls the real main when the compiled program is run.
   (define main
