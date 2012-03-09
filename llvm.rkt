@@ -25,7 +25,15 @@
   
 (define (code-gen code-ast outfile verbose-mode exec-mode)
 
-  (define llvm-dis "/usr/bin/llvm-dis") ; TODO: determine this dynamically.
+  ; *.bc file -> *.ll file
+  (define (llvm-dis filename)
+    (let-values (((process out in err) (subprocess #f #f #f "/usr/bin/llvm-dis" filename)))
+     (begin0
+      (close-output-port in)
+      (close-input-port err)
+      (close-input-port out)
+      (subprocess-wait process)
+      )))
   
   (define outfilename
     (cond
@@ -33,7 +41,7 @@
        (path->string outfile))
       (else outfile)))
   
-  (define (debug message)
+  (define (debug message) 
     (cond (verbose-mode (displayln message))))
   
   (debug (string-append "Generating code using LLVM version: " (version)))
@@ -60,10 +68,13 @@
   ; All numbers are int32's for now
   (define (gen-number n)
     (LLVMConstInt (LLVMInt32TypeInContext context) n false))
-  
+
+  (define (gen-string s)
+     (LLVMConstString s false)) ;TODO: InContext?
+
   ; Variable reference
   (define (gen-var name)
-    (let ((var (hash-ref env name))) ; TODO: custom error as 3rd arg
+    (let ((var (hash-ref env name (lambda () (error "Undefined identifier: ~a" name)))))
           var)) ; TODO: add cutom type-tag to differentiate between Value and Function? May not have to: instead: TheModule->getFunction(Callee)
   
   ; Variable definition
@@ -72,26 +83,26 @@
   
   (define (gen-primative op L R)
     ;TODO: eval/apply L and R first?
-    (cond 
-      ((eq? op '+) (LLVMBuildAdd builder L R "addtmp"))
-      ((eq? op '-) (LLVMBuildSub builder L R "subtmp"))
-      ((eq? op '*) (LLVMBuildMul builder L R "multmp"))
-      ((eq? op '/) (LLVMBuildSDiv builder L R "divtmp"))
-      ((eq? op '%) (LLVMBuildSRem builder L R "modtmp"))
-      ((eq? op '&) (LLVMBuildAnd builder L R "andtmp"))
-      ((eq? op 'or) (LLVMBuildOr builder L R "ortmp"))
-      ((eq? op '^) (LLVMBuildXor builder L R "xortmp"))
-      ((eq? op '~) (LLVMBuildNot builder L R "nottmp"))
-      ((eq? op '<<) (LLVMBuildShl builder L R "shltmp"))
-      ((eq? op '>>) (LLVMBuildAShr builder L R "shrtmp")) ;TODO: or LShr?
-      ((eq? op '=) (LLVMBuildICmp builder 'LLVMIntEQ L R "cmptmp"))
-      ((eq? op '<>) (LLVMBuildICmp builder 'LLVMIntNE L R "cmptmp"))
-      ((eq? op '<) (LLVMBuildICmp builder 'LLVMIntSLT L R "cmptmp"))
-      ((eq? op '<=) (LLVMBuildICmp builder 'LLVMIntSLE L R "cmptmp"))
-      ((eq? op '>) (LLVMBuildICmp builder 'LLVMIntSGT L R "cmptmp"))
-      ((eq? op '>=) (LLVMBuildICmp builder 'LLVMIntSGE L R "cmptmp"))
-      (else error "invalid primative")))
-  
+    (case op
+      ('+ (LLVMBuildAdd builder L R "addtmp"))
+      ('- (LLVMBuildSub builder L R "subtmp"))
+      ('* (LLVMBuildMul builder L R "multmp"))
+      ('/ (LLVMBuildSDiv builder L R "divtmp"))
+      ('% (LLVMBuildSRem builder L R "modtmp"))
+      ('& (LLVMBuildAnd builder L R "andtmp"))
+      ('or (LLVMBuildOr builder L R "ortmp"))
+      ('^ (LLVMBuildXor builder L R "xortmp"))
+      ('~ (LLVMBuildNot builder L R "nottmp"))
+      ('<< (LLVMBuildShl builder L R "shltmp"))
+      ('>> (LLVMBuildAShr builder L R "shrtmp")) ;TODO: or LShr?
+      ('= (LLVMBuildICmp builder 'LLVMIntEQ L R "cmptmp"))
+      ('<> (LLVMBuildICmp builder 'LLVMIntNE L R "cmptmp"))
+      ('< (LLVMBuildICmp builder 'LLVMIntSLT L R "cmptmp"))
+      ('<= (LLVMBuildICmp builder 'LLVMIntSLE L R "cmptmp"))
+      ('> (LLVMBuildICmp builder 'LLVMIntSGT L R "cmptmp"))
+      ('>= (LLVMBuildICmp builder 'LLVMIntSGE L R "cmptmp"))
+      (else error "gen-primative: invalid primative: ~a" op)))
+
   (define (gen-call fname args)
     ;Look up the name in the global module table.
     (let*
@@ -102,18 +113,13 @@
       ;If argument mismatch error.
       ;if (callee->arg_size() != Args.size())
       ;return ErrorV("Incorrect # arguments passed");
-      (LLVMBuildCall builder callee args "calltmp")))
+      (define call (LLVMBuildCall builder callee args "calltmp"))
+      (LLVMSetInstructionCallConv call 'LLVMFastCallConv) ; MUST MATCH FUNCTION DEFINITION
+      ; TODO: (LLVMSetTailCall call true)
+      call ; Returned object can be used to reference the return value of this call
+      ))
 
   #|
-Function *PrototypeAST::Codegen() {
-  // Make the function type:  double(double,double) etc.
-  std::vector<Type*> Doubles(Args.size(),
-                             Type::getDoubleTy(getGlobalContext()));
-  FunctionType *FT = FunctionType::get(Type::getDoubleTy(getGlobalContext()),
-                                       Doubles, false);
-  
-  Function *F = Function::Create(FT, Function::ExternalLinkage, Name, TheModule);
-  
   // If F conflicted, there was already something named 'Name'.  If it has a
   // body, don't allow redefinition or reextern.
   if (F->getName() != Name) {
@@ -134,81 +140,89 @@ Function *PrototypeAST::Codegen() {
     }
   }
   
-  // Set names for all arguments.
-  unsigned Idx = 0;
-  for (Function::arg_iterator AI = F->arg_begin(); Idx != Args.size();
-       ++AI, ++Idx) {
-    AI->setName(Args[Idx]);
-    
-    // Add arguments to variable symbol table.
-    NamedValues[Args[Idx]] = AI;
-  }
-  
-  return F;
-}
-|#
- #|
-Function *FunctionAST::Codegen() {
-  NamedValues.clear();
-  
-  Function *TheFunction = Proto->Codegen();
-  if (TheFunction == 0)
-    return 0;
-  
-  // Create a new basic block to start insertion into.
-  BasicBlock *BB = BasicBlock::Create(getGlobalContext(), "entry", TheFunction);
-  Builder.SetInsertPoint(BB);
-  
-  if (Value *RetVal = Body->Codegen()) {
-    // Finish off the function.
-    Builder.CreateRet(RetVal);
-
-    // Validate the generated code, checking for consistency.
-    verifyFunction(*TheFunction);
-
-    return TheFunction;
-  }
-  
   // Error reading body, remove function.
   TheFunction->eraseFromParent();
   return 0;
 }
   |#
   
-  ;TODO: hardcoded. generate this dynamically
-  (define (gen-body args)
-    ;body = return args[0]*2+3
-    (let* (
-           (a (gen-primative '* (car args) (cadr args))) ; first arg times 2nd arg,
-           (b (gen-primative '+ (gen-number 3) a)) ; plus three
-           )
-      (LLVMBuildRet builder b))) ; return it
+  
     
+  
+  
   (define (gen-function ret-type func-name argtypes body)
     (let* (
       (numargs (length argtypes))
-      (funtype (LLVMFunctionType ret-type argtypes numargs))
+      (funtype (LLVMFunctionType ret-type argtypes #f)) ; #f = no varargs - they're incompatible w/ LLVMFastCallConv
       (func (LLVMAddFunction module func-name funtype))
+	; TODO: clear env, or make new frame
       (args ; Unpack all arguments declared in func-type into a list:
        (for/list ((n (in-range numargs)))
-        ;(LLVMSetValueName x "x") ; optional hint for better names in IR
+	; TODO: add to env (append this whole list once it's done?)
+        ;(LLVMSetValueName x "x") ; optional? hint for better names in IR?
         (LLVMGetParam func n)))
       )
+    (LLVMSetFunctionCallConv func 'LLVMFastCallConv) ; CALLS MUST MATCH THIS
+    ; TODO: (LLVMSetTailCall func true)
+    (LLVMSetLinkage func 'LLVMPrivateLinkage)
+    
+
+      ; Tiger does it this way:
+      #|
+(let* ((fun (hash-ref all-functions name))
+            (block (llvm-add-block-to-function fun)))
+      (LLVMSetFunctionCallConv fun 'LLVMFastCallConv)
+      (LLVMSetLinkage fun 'LLVMPrivateLinkage)
+      (llvm-set-position block)
+      (let* ((env (for/fold ((env global-environment)) ((arg-name arg-names) (i (in-naturals)))
+                  (hash-set env arg-name (llvm-get-param (add1 i)))))
+             (env (for/fold ((env env)) ((arg-name closed-names) (arg-type closed-types) (i (in-naturals)))
+                   (hash-set env arg-name 
+                    (llvm-int-to-ptr
+                     (llvm-load (llvm-gep (llvm-get-param 0) 0 1 i))
+                     (convert-type arg-type))))))
+|#
       
-    ; a block:
+      
+    ; "A function definition contains a list of basic blocks, forming the CFG (Control Flow Graph) for the function.
+    ; Each basic block may optionally start with a label (giving the basic block a symbol table entry), contains a list of instructions,
+    ; and ends with a terminator instruction (such as a branch or function return).
+    ; The first basic block in a function is special in two ways: it is immediately executed on entrance to the function, and it is not allowed to have predecessor basic blocks"
+
+    ; TODO: generate prototype and check for errors/name colisions
     (define entry (LLVMAppendBasicBlockInContext context func "entry"))
-    ;place the builder
-    (LLVMPositionBuilderAtEnd builder entry)
-    
+    (LLVMPositionBuilderAtEnd builder entry)    ;place the builder
     (body args) ; Delegate the generation of the actual body code to the supplied function.
-    
-    
-    func)) ; experimental: return func object to caller
+    (LLVMVerifyFunction func 'LLVMAbortProcessAction)
+    ; TODO: (LLVMAddAlias module funtype func alias-name)
+    func ; Return the function object.
+  ))
+
   
+  (define real-main
+    (gen-function int-type "real-main" (list int-type int-type)
+       (lambda (args) ;TODO: hardcoded. generate this dynamically
+         ;body = return args[0]*args[1]+4
+         (let* (
+           (a (gen-primative '* (car args) (cadr args))) ; first arg times 2nd arg,
+           (b (gen-primative '+ (gen-number 4) a)) ; plus four
+           )
+           (LLVMBuildRet builder b))) ; return it
+    ))
   
-  ; Every program needs a function called "main" ;TODO: This isn't magic; still pry needs some linkage to be a runnable stand-alone program.
+  ; Every program needs the standard function "int main(int,char**)"
+  ; This is a driver/stub/wrapper that calls the real main when the compiled program is run.
   (define main
-    (gen-function int-type "main" (list int-type int-type) gen-body))
+    (let* (
+         (takes-varargs #f)
+         (funtype (LLVMFunctionType int-type (list int-type (LLVMPointerType (LLVMPointerType (LLVMInt8Type) 0) 0) ) takes-varargs))
+         (func (LLVMAddFunction module "main" funtype))
+         (entry (LLVMAppendBasicBlockInContext context func "entry")) )
+      (LLVMPositionBuilderAtEnd builder entry)    ;place the builder
+      (define call-real-main (gen-call "real-main" (list (gen-number 5) (gen-number 7)) ))
+      (LLVMBuildRet builder call-real-main) ; return real-main's return value
+      (LLVMSetLinkage func 'LLVMExternalLinkage) ; main is the only External function - the others are Private
+      func))
   
   
   
@@ -217,10 +231,12 @@ Function *FunctionAST::Codegen() {
   
   
   
-  (let-values (((err) (LLVMVerifyModule module 'LLVMReturnStatusAction))) ; This is where the 0 in the console output comes from.
+  (debug "Verifying generated code...")
+  (let-values (((err) (LLVMVerifyModule module 'LLVMAbortProcessAction)))
     (when err
       (display err) (exit -1)))
   
+  (debug "JIT compiling generated code...")
   (LLVMLinkInJIT) ; or (LLVMLinkInInterpreter)
   (LLVMDisposeBuilder builder)
   
@@ -228,15 +244,8 @@ Function *FunctionAST::Codegen() {
   (LLVMWriteBitcodeToFile module outfilename)
   
   (when verbose-mode (LLVMDumpModule module)) ; to stderr
-  ; Since LLVMDumpModule only writes to stderr, instead get LLVM IR by disassembling the bitcode file.
-  (let-values (((process out in err) (subprocess #f #f #f llvm-dis outfilename))) ; *.bc file -> *.ll file
-     (begin0
-      (close-output-port in)
-      (close-input-port err)
-      (close-input-port out)
-      (subprocess-wait process)
-      ))
-  
+  (llvm-dis outfilename) ; Since LLVMDumpModule only writes to stderr, instead get LLVM IR by disassembling the bitcode file.
+    
   ; run inline:
   (cond (exec-mode
     (let (
