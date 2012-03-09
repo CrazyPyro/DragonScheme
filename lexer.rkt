@@ -51,13 +51,13 @@
 (define-lex-abbrevs
   (digit (:/ #\0 #\9)) ; 0-9
   (number (::
-           (:? "+" "-") ; TODO: Include "." per R5RS 2.3, but this will require adding support for real numbers in the code generator.
-           (:+ digit)))
+           (:? "+" "-")
+           (:+ digit))) ; TODO: Include up to one "." per R5RS 2.3, but this will require adding support for real numbers in the code generator.
   
   ; Per R5RS 2.1, an identifier starts with a letter or one of these "extended alphabetic characters."
   (intentifier-inital (:+ alphabetic #\_ #\< #\> #\/ #\? #\! #\* #\= #\$ #\% #\& #\: #\@ #\^ #\~ ))
   ; The following keyboard non-alphanumerics are not included '`,\"()[]{};|
-  ;   because they already have special meaning, respectively: quote, quasiquote, unquote, string-literal, 3 ways of delimiting expressions, comment, and reserved.
+  ;   because they already have special meaning, respectively: quote, quasiquote, unquote, char-literal, string-literal, 3 ways of delimiting expressions, comment, and reserved.
   ; Any following characers can also be number characters ( + - . digit)
   (identifier-full (:or
                     (:: intentifier-inital (:* intentifier-inital digit #\+ #\- #\. )) ; general case
@@ -72,12 +72,17 @@
                     (:* (:~ "\n")) ; and go to end of line
                     ;; Chomp the newline at the end, if it's there.  (Last line of the file could be a comment without a newline)
                     (:? "\n" "\r")))
+  
+  (literal-quote (:= 1 #\"))
+  (literal-escape (:= 1 #\\))
+  (string-literal (:: literal-quote
+           (:* (:~ literal-quote)))) ; TODO: This can't handle escaped literal quotes.
 )
 
 
 ; String lexer is used by the main lexer to lex out quoted string-literals.
   ;; Taken verbatim from endobson's "Tiger" lexer
-(define (string-lexer port start-pos) ; TODO: (define string-lexer (lexer-src-pos
+(define (string-lexer port start-pos)
   (define (digit? x)
     (and (memq x '(#\0 #\1 #\2 #\3 #\4 #\5 #\6 #\7 #\8 #\9)) #t))  ; TODO: vs digit abbrv above?
 
@@ -137,9 +142,9 @@
   
    ; Constants/literals:
    (number (token-integer (string->number lexeme)))
+      ;(string-literal (token-string (lexeme))) ; TODO: This can't handle escaped literal quotes, so:
    ; See a quote?  Call the helper to lex out the string literal:
    ("\"" (return-without-pos (string-lexer input-port start-pos)))
-   
    
    ; core Scheme keywords:
    ("begin" (token-begin))

@@ -40,8 +40,11 @@
     
     
     (scheme ; The main non-terminal: Scheme is composed of definitions and expressions.
-      ((definition) $1)
-      ((expression) $1) )
+      ((definition) (list $1))
+      ((definition scheme) (cons $1 $2))
+      ((expression) (list $1))
+      ((expression scheme) (cons $1 $2))
+      )
     
     (definition ; The keyword "define" distinguishes definitions from expressions. 
       ((open-paren define identifier expression close-paren)
@@ -78,7 +81,9 @@
     
     (procedure
       ((open-paren lambda open-paren param-list close-paren expression close-paren)
-        (make-procedure $4 $6))
+        (make-lambda-procedure $4 $6))
+      ((open-paren define open-paren identifier param-list close-paren expression close-paren) ; proc name is the first "param"
+       (make-define-procedure $4 $5 $7))
       )
     
     (param-list ; A list of 0 or more identifiers
@@ -101,6 +106,8 @@
     (cond-clause
      ((open-paren expression expression close-paren)
       (make-cond-clause $2 $3))
+     ((open-paren else expression close-paren)
+      (make-cond-clause-else $3))
      )
      
     
