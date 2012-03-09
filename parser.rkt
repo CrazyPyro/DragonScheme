@@ -40,10 +40,10 @@
     
     
     (scheme ; The main non-terminal: Scheme is composed of definitions and expressions.
-      ((definition) $1)
-      ((definition scheme) (list $1 $2))
-      ((expression) $1)
-      ((expression scheme) (list $1 $2))
+      ((definition) (list $1))
+      ((definition scheme) (cons $1 $2))
+      ((expression) (list $1))
+      ((expression scheme) (cons $1 $2))
       )
     
     (definition ; The keyword "define" distinguishes definitions from expressions. 
