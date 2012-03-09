@@ -1,15 +1,18 @@
 /* CSS for the web interface */
 body {
-	color: black;
-	background-color: white;
+	color: #666666;
+	background-color: #181818;
 }
 .top {
 	color: #688196;
 	background-color:#1E4262;
 }
 a {
+	color: #666666;
 }
 textarea {
+	color: darkgreen;
+	background-color: #181818;
 }
 input {
 	display: block;

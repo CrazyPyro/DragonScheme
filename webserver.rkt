@@ -56,13 +56,19 @@
             (response/xexpr
              `(html (head
 			(title "DragonScheme web compiler")
-			(link ((rel "stylesheet")
+                   (link ((rel "stylesheet")
 				(href "/style.css")
-				(type "text/css"))))
+				(type "text/css")
+                           (title "light")))
+			(link ((rel "alternate stylesheet")
+				(href "/dark.css")
+				(type "text/css")
+                           (title "dark"))))
                     (body
                      (h1 "DragonScheme")
                      (h2 "Web Demo")
-			(p (a ((href ,dragonscheme-url)) "Click here to reset page if you get a \"page expired\" error."))
+                     (h3 ,(string-append "(LLVM version on server: " (version) ")" ))
+                     (p (a ((href ,dragonscheme-url)) "Click here to reset page if you get a \"page expired\" error."))
                      (form ((action
                              ,(make-url insert-compilation-handler)))
                            (textarea ((name "src") (rows "20") (cols "80")) "(define type-your scheme-here)" )
@@ -89,14 +95,14 @@
             )
          `(p
            (h2 "Generated LLVM IR:")
-           (pre 
+           (pre (code ((class "language-llvm") (id "ir"))
               ,(call-with-input-file (build-path tmpdir ll-file)
                   (lambda (infile)
                     ; TODO: 'return-linefeed is a *nix-only hack to read the whole file as one line, since the file won't contain a 'return-linefeed on *nix.
-                    (read-line infile 'return-linefeed))))
+                    (read-line infile 'return-linefeed)))))
            (h2 "Downloads:")
-           (ul (li (a ((href ,bc-file)) "Generated LLVM bitcode file (binary, execute using lli)")) ; TODO: may need to first be  linked using llvm-ld
-             (li (a ((href ,ll-file)) "Generated LLVM IR file (human-readable)")))
+           (ul (li (a ((href ,bc-file)) "Generated LLVM bitcode file") " (binary, execute using " (kbd "lli " (samp ,bc-file) "; echo $?") " )")
+             (li (a ((href ,ll-file)) "Disassembled LLVM IR file (human-readable)")))
            )))
       (else "")))) ; No output file specified? Then nothing to show.
   
@@ -108,15 +114,14 @@
 (define (render-compilation a-compilation)
   `(div ((class "compilation"))
         (h2 "Original Source Code:")
-        (pre ((class "src"))
-             ,(compilation-src a-compilation))
+        (pre (code ((class "language-scheme") (id "src"))
+             ,(compilation-src a-compilation)))
         (h2 "Parsed AST:")
-        (pre ((class "ast"))
-             ,(to-string (compilation-ast a-compilation)))
-        (p ,(string-append "LLVM version on server: " (version)))
+        (pre (code ((class "language-scheme") (id "ast"))
+             ,(to-string (compilation-ast a-compilation))))
         (h2 "Execution Result:")
-        (pre ((class "ir"))
-             ,(to-string (compilation-ir a-compilation)))
+        (pre (samp ((id "output"))
+             ,(to-string (compilation-ir a-compilation))))
         (p ,(download-links a-compilation))
         ))
  
