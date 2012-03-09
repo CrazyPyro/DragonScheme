@@ -24,7 +24,7 @@
      [("-v" "--verbose") "Compile with verbose messages."
                          (verbose-mode #t)]
      [("-o" "--output") output ; flag takes one argument
-                            "Specify the name of the output file. If none is specified, none will be written."
+                            "Specify the name of the output *.bc file. Default is [filename].bc An *.ll file will also be produced."
                             (outfilename output)]
      #:once-any
      [("-p" "--parse") "Lex and parse only; Don't emit IR code."
@@ -39,15 +39,23 @@
      ; return the argument as a filename to compile
      filename))
   
-  (let ((path cmdline-args)) ;((sequence-ref (in-lines) 0)))
+  (let ((path cmdline-args))
     (cond ((verbose-mode) (displayln (string-append "Reading file: " path))))
-    (let ((filestream (open-input-file path #:mode 'binary))
-          (outfilename (cond ((equal? (outfilename) "") (string-append path ".ll")) (else (outfilename)))))
+    (let ((filestream (open-input-file path #:mode 'binary)))
       (cond
         ((parse-only) (parse filestream))
-        (else (code-gen (parse filestream) outfilename (verbose-mode) (exec-mode)))
-      )
-    )
-  )
+        (else ; compile (and maybe exec)
+         (let
+            ((bcfilename
+             (cond
+               ((equal? (outfilename) "") ; no output file specified? Use input filename w/ extension changed to ".bc"
+                (let*
+                  ((basename path)
+                   (extension (filename-extension path)) )
+                  (string-append (substring basename 0 (- (string-length basename) (bytes-length extension))) "bc"))) ; replace extension with .bc
+               (else (outfilename)))))
+           ; The actual compile:
+           (code-gen (parse filestream) bcfilename (verbose-mode) (exec-mode)))
+         ))))
   
 )
