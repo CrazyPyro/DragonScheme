@@ -198,7 +198,8 @@
     func ; Return the function object.
   ))
 
-  
+
+#|  
   (define real-main
     (gen-function int-type "real-main" (list int-type int-type)
        (lambda (args) ;TODO: hardcoded. generate this dynamically
@@ -209,8 +210,11 @@
            )
            (LLVMBuildRet builder b))) ; return it
     ))
-  
+ |#
+ 
   ;TODO: look at compile-expr in Tiger's code-gen.rkt
+  ;TODO: better matching: http://docs.racket-lang.org/reference/match.html
+  (define (walk-ast main-entry) ; main-entry is where we left off in the main
          (for/list ((node code-ast))
            (case (car node)
              ('define
@@ -233,9 +237,20 @@
                 (debug (string-append "Define " name))
                 (gen-function int-type name (for/list ((n (in-range (length params)))) int-type)
                      (lambda (args)
-                       (LLVMBuildRet builder (gen-number (length params)))))
+                       (LLVMBuildRet builder (gen-number (length params))))) ))
+             ('proc-apply
+              (let* (
+                      (name (cadr node))
+                      (args+types (caddr node))
+                      (proc (symbol->string name)) ; TODO: this will have to be manually looked up in the function table
+                      (args (for/list ((arg+type args+types)) (gen-number (cadr arg+type))) ) ; just the arg; TODO: validate/dispatch-on type
+                      )
+                (debug (string-append "Apply " proc))
+	      (LLVMPositionBuilderAtEnd builder main-entry)    ;place the builder
+                (gen-call proc args) ; TODO: again, builder gets in wrong spot here...
+                ;(LLVMBuildRet builder (gen-number (length params)))))
               ))
-             (else (debug "Not a Define")) ))
+             (else (debug "Not a Define")) )) )
   
   ; Every program needs the standard function "int main(int,char**)"
   ; This is a driver/stub/wrapper that calls the real main when the compiled program is run.
@@ -245,9 +260,15 @@
          (funtype (LLVMFunctionType int-type (list int-type (LLVMPointerType (LLVMPointerType (LLVMInt8Type) 0) 0) ) takes-varargs))
          (func (LLVMAddFunction module "main" funtype))
          (entry (LLVMAppendBasicBlockInContext context func "entry")) )
-      (LLVMPositionBuilderAtEnd builder entry)    ;place the builder
-      (define call-real-main (gen-call "real-main" (list (gen-number 5) (gen-number 7)) ))
-      (LLVMBuildRet builder call-real-main) ; return real-main's return value
+      
+      (walk-ast entry)
+      (LLVMPositionBuilderAtEnd builder entry) ; TODO: this is a hack. need to better keep track of the builder's place
+      
+      ;(define call-real-main (gen-call "real-main" (list (gen-number 5) (gen-number 7)) ))
+      
+(LLVMBuildRet builder (gen-number 0)) ; return 0 TODO: keep track of function calls and return the result of the last one.
+;(LLVMBuildRet builder call-real-main) ; return real-main's return value
+
       (LLVMSetLinkage func 'LLVMExternalLinkage) ; main is the only External function - the others are Private
       func))
   
