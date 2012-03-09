@@ -1,3 +1,5 @@
+#!/usr/bin/env racket
+
 (module test-parser racket
   (require rackunit
          "parser.rkt" ; The parser under test

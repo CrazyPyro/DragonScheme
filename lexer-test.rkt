@@ -1,3 +1,5 @@
+#!/usr/bin/env racket
+
 (module test-lexer racket
   (require rackunit
          parser-tools/lex ; Need some of the lexer tools for use in testing the lexer.
