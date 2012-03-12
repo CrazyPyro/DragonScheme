@@ -39,6 +39,11 @@
      ; return the argument as a filename to compile
      filename))
   
+  (define (web-pretty-print xexp)
+  (let ((pretty-xexp (open-output-string)))
+    (pretty-print xexp pretty-xexp)
+    (get-output-string pretty-xexp)))
+  
   (let ((path cmdline-args))
     (cond ((verbose-mode) (displayln (string-append "Reading file: " path))))
     (let ((filestream (open-input-file path #:mode 'binary)))

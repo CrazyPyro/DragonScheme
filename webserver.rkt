@@ -107,7 +107,10 @@
       (else "")))) ; No output file specified? Then nothing to show.
   
 
-
+(define (web-pretty-print xexp)
+  (let ((pretty-xexp (open-output-string)))
+    (pretty-print xexp pretty-xexp)
+    (get-output-string pretty-xexp)))
   
 ; render-compilation: compilation -> xexpr
 ; Consumes a compilation, produces an xexpr fragment of the compilation.
@@ -118,7 +121,7 @@
              ,(compilation-src a-compilation)))
         (h2 "Parsed AST:")
         (pre (code ((class "language-scheme") (id "ast"))
-             ,(to-string (compilation-ast a-compilation))))
+             ,(web-pretty-print (compilation-ast a-compilation)) ))
         (h2 "Execution Result:")
         (pre (samp ((id "output"))
              ,(to-string (compilation-ir a-compilation))))
