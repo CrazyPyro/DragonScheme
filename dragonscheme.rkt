@@ -57,8 +57,7 @@
          (let
             ((bcfilename
              (cond
-               ((equal? (outfilename) "") ; no output file specified? Use input filename w/ extension changed to ".bc"
-                ;TODO: barf if raw-code is true
+               ((and (not raw-code) (equal? (outfilename) "")) ; no output file specified? Use input filename w/ extension changed to ".bc"
                 (let*
                   ((basename path)
                    (extension (filename-extension path)) )

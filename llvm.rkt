@@ -216,7 +216,6 @@
                       (body (cadddr node))
                       (name (symbol->string (gensym proc-name))) ; unique name for the function being generated - the "real" function name for callers to invoke.
                       )
-                ;(hash-set! env proc-name name) ; Add the function name to the environment - It keys to the "real" function name for callers to invoke.
                 (debug (string-append "Define " name))
                 (gen-function int-type name (for/list ((n (in-range (length params)))) int-type)
                      (lambda (args)
