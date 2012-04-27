@@ -76,10 +76,12 @@
   (define (gen-var name)
     (let ((var (hash-ref env name (lambda () (error "Undefined identifier: ~a" name)))))
           var)) ; TODO: add cutom type-tag to differentiate between Value and Function? May not have to: instead: TheModule->getFunction(Callee)
+  ;(LLVMGetNamedGlobal module name)
   
   ; Variable definition
   (define (gen-def name val)
     (hash-set! env name val))
+  ;(LLVMAddGlobal module type name)
   
   (define (gen-primative op L R)
     ;TODO: eval/apply L and R first?
@@ -171,9 +173,6 @@
       #|
 (let* ((fun (hash-ref all-functions name))
             (block (llvm-add-block-to-function fun)))
-      (LLVMSetFunctionCallConv fun 'LLVMFastCallConv)
-      (LLVMSetLinkage fun 'LLVMPrivateLinkage)
-      (llvm-set-position block)
       (let* ((env (for/fold ((env global-environment)) ((arg-name arg-names) (i (in-naturals)))
                   (hash-set env arg-name (llvm-get-param (add1 i)))))
              (env (for/fold ((env env)) ((arg-name closed-names) (arg-type closed-types) (i (in-naturals)))
@@ -199,22 +198,36 @@
   ))
 
 
-#|  
-  (define real-main
-    (gen-function int-type "real-main" (list int-type int-type)
-       (lambda (args) ;TODO: hardcoded. generate this dynamically
-         ;body = return args[0]*args[1]+4
+  
+  (define primative_+
+    (gen-function int-type "primative_+" (list int-type int-type)
+       (lambda (args)
+         ;body = return args[0]+args[1]
          (let* (
-           (a (gen-primative '* (car args) (cadr args))) ; first arg times 2nd arg,
-           (b (gen-primative '+ (gen-number 4) a)) ; plus four
+           (a (gen-primative '+ (car args) (cadr args)))
            )
-           (LLVMBuildRet builder b))) ; return it
+           (LLVMBuildRet builder a))) ; return it
     ))
- |#
+
+  (define (compile-lambda node)
+              (let* (
+                      (proc-name (cadr node))
+                      (params (caddr node))
+                      (body (cadddr node))
+                      (name (symbol->string (gensym proc-name))) ; unique name for the function being generated - the "real" function name for callers to invoke.
+                      )
+                ;(hash-set! env proc-name name) ; Add the function name to the environment - It keys to the "real" function name for callers to invoke.
+                (debug (string-append "Define " name))
+                (gen-function int-type name (for/list ((n (in-range (length params)))) int-type)
+                     (lambda (args)
+                       (LLVMBuildRet builder (gen-number (length params))))) ;TODO: Every lambda just returns the number of args - need to actually generate the real function body!
+                name)) ; Return the new function name, so that it can be added to the environment.
+
+  
  
   ;TODO: look at compile-expr in Tiger's code-gen.rkt
   ;TODO: better matching: http://docs.racket-lang.org/reference/match.html
-  (define (walk-ast main-entry) ; main-entry is where we left off in the main
+  (define (walk-ast code-ast main-entry env) ; main-entry is the most recent LLVM Builder position
          (for/list ((node code-ast))
            (case (car node)
              ('define
@@ -223,34 +236,34 @@
                       (rhs (caddr node))
                       (rhs-type (car rhs))
                       (rhs-val (cadr rhs)))
-                 (case rhs-type
-                   ('integer (begin (gen-number rhs-val)))
-                   (else (debug "Define is Not an integer"))
-                 )))
+                 (hash-set! env lhs  ; Add the define'd name to the environment, and set it to...
+                            (case rhs-type
+                              ('integer (gen-number rhs-val))
+                              ; TODO: ('string (gen-string rhs-val))
+                              ('procedure (compile-lambda rhs)) ; name of the compiled function for this procedure
+                              ;TODO: 'proc-apply (assign ret val)
+                              (else (debug "RHS of define is not a supported type (integer or lambda)"))
+                 ))))
+             
              ('procedure
-              (let* (
-                      (proc-name (cadr node))
-                      (params (caddr node))
-                      (body (cadddr node))
-                      (name (symbol->string (gensym proc-name))) ; unique; TODO: is symbol->string un-uniquing these?
-                      )
-                (debug (string-append "Define " name))
-                (gen-function int-type name (for/list ((n (in-range (length params)))) int-type)
-                     (lambda (args)
-                       (LLVMBuildRet builder (gen-number (length params))))) ))
-             ('proc-apply
+              (case (cadr node) ; the name
+                ('lambda (compile-lambda node)) ;anonymous lambdas just get compiled
+                (else (hash-set! env (cadr node) (compile-lambda node))))) ; Ones with a name specified will have that name added to the environmen.
+             
+             ('proc-apply ; TODO: Won't apply unnamed (lambda)
               (let* (
                       (name (cadr node))
                       (args+types (caddr node))
-                      (proc (symbol->string name)) ; TODO: this will have to be manually looked up in the function table
+                      (proc (hash-ref env name ;Look up "real" function name in the environment.
+                                      (lambda () (raise (string-append "Call to undefined function: " (symbol->string name))))))
                       (args (for/list ((arg+type args+types)) (gen-number (cadr arg+type))) ) ; just the arg; TODO: validate/dispatch-on type
                       )
                 (debug (string-append "Apply " proc))
-	      (LLVMPositionBuilderAtEnd builder main-entry)    ;place the builder
+                (LLVMPositionBuilderAtEnd builder main-entry)    ;place the builder
                 (gen-call proc args) ; TODO: again, builder gets in wrong spot here...
                 ;(LLVMBuildRet builder (gen-number (length params)))))
               ))
-             (else (debug "Not a Define")) )) )
+             (else (debug "Don't know how to generate code for this successfully-parsed construct.")) )) )
   
   ; Every program needs the standard function "int main(int,char**)"
   ; This is a driver/stub/wrapper that calls the real main when the compiled program is run.
@@ -261,13 +274,13 @@
          (func (LLVMAddFunction module "main" funtype))
          (entry (LLVMAppendBasicBlockInContext context func "entry")) )
       
-      (walk-ast entry)
+      (walk-ast code-ast entry env)
       (LLVMPositionBuilderAtEnd builder entry) ; TODO: this is a hack. need to better keep track of the builder's place
       
       ;(define call-real-main (gen-call "real-main" (list (gen-number 5) (gen-number 7)) ))
       
-(LLVMBuildRet builder (gen-number 0)) ; return 0 TODO: keep track of function calls and return the result of the last one.
-;(LLVMBuildRet builder call-real-main) ; return real-main's return value
+      (LLVMBuildRet builder (gen-number 0)) ; return 0 TODO: keep track of function calls and return the result of the last one.
+      ;(LLVMBuildRet builder call-real-main) ; return real-main's return value
 
       (LLVMSetLinkage func 'LLVMExternalLinkage) ; main is the only External function - the others are Private
       func))
