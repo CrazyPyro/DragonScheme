@@ -7,7 +7,6 @@
   ;; racket-llvm/llvm.rkt depends on some C++ bindings.
   ;; Copy/symlink racket-llvm.Makefile to racket-llvm/Makefile and run make.
   ;; (Otherwise it throws an error complaining "llvm-racket.so" can't be found.)
-  ;; If you then get a "wrong ELF class" error, change -m32 to -m64 (or viceversa) in the Makefile and recompile.
   
   ;; See also http://llvm.org/docs/CodeGenerator.html
   

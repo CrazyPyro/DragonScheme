@@ -18,7 +18,6 @@ LLVMLIBS=$(${LLVMLIBDIR}/*.so)
 default: llvm-racket.so
 
 llvm-racket.so: llvm-racket.cpp
-	clang++ -shared -m64 -o llvm-racket.so ${LLVMCXXFLAGS} ${LLVMLDFLAGS} ${LLVMLIBS} llvm-racket.cpp
-	echo 'If you get a "wrong ELF class" error, change -m32 to -m64 (or viceversa to match your arch) and recompile.'
+	clang++ -shared -o llvm-racket.so ${LLVMCXXFLAGS} ${LLVMLDFLAGS} ${LLVMLIBS} llvm-racket.cpp
 clean:
 	rm llvm-racket.so
