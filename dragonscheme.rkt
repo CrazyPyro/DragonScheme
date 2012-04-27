@@ -16,6 +16,7 @@
   (define parse-only (make-parameter #f))
   (define outfilename (make-parameter ""))
   (define exec-mode (make-parameter #f))
+  (define raw-code (make-parameter #f))
   
   (define cmdline-args
     (command-line  ; http://docs.racket-lang.org/reference/Command-Line_Parsing.html
@@ -26,6 +27,8 @@
      [("-o" "--output") output ; flag takes one argument
                             "Specify the name of the output *.bc file. Default is [filename].bc An *.ll file will also be produced."
                             (outfilename output)]
+     [("-i") "Instead of an input filename, take raw code to compile.  Must also specify either -p or -o"
+                            (raw-code #t)]
      #:once-any
      [("-p" "--parse") "Lex and parse only; Don't emit IR code."
                        (parse-only #t)]
@@ -45,8 +48,9 @@
     (get-output-string pretty-xexp)))
   
   (let ((path cmdline-args))
-    (cond ((verbose-mode) (displayln (string-append "Reading file: " path))))
-    (let ((filestream (open-input-file path #:mode 'binary)))
+    (let ((filestream (cond
+                        ((raw-code) (open-input-string path)) ; "path" is the actual code
+                        (else (open-input-file path #:mode 'binary))))) ; otherwise it's the path to the code file
       (cond
         ((parse-only) (parse filestream))
         (else ; compile (and maybe exec)
@@ -54,6 +58,7 @@
             ((bcfilename
              (cond
                ((equal? (outfilename) "") ; no output file specified? Use input filename w/ extension changed to ".bc"
+                ;TODO: barf if raw-code is true
                 (let*
                   ((basename path)
                    (extension (filename-extension path)) )
